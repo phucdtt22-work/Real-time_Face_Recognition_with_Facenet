@@ -11,47 +11,6 @@ from PIL import Image
 from torchvision import transforms
 import pypyodbc as pyodbc
 
-class EmotionDetector(nn.Module):
-    def __init__(self):
-        super(EmotionDetector, self).__init__()
-        self.cnn1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=3)
-        self.cnn2 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3)
-        self.cnn3 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3)
-        self.cnn4 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3)
-        self.cnn5 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3)
-        self.cnn6 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3)
-        self.cnn7 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3)
-        self.relu = nn.ReLU()
-        self.pool1 = nn.MaxPool2d(2, 1)
-        self.pool2 = nn.MaxPool2d(2, 2)
-        self.cnn1_bn = nn.BatchNorm2d(8)
-        self.cnn2_bn = nn.BatchNorm2d(16)
-        self.cnn3_bn = nn.BatchNorm2d(32)
-        self.cnn4_bn = nn.BatchNorm2d(64)
-        self.cnn5_bn = nn.BatchNorm2d(128)
-        self.cnn6_bn = nn.BatchNorm2d(256)
-        self.cnn7_bn = nn.BatchNorm2d(256)
-        self.fc1 = nn.Linear(1024, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 7)
-        self.dropout = nn.Dropout(0.3)
-        self.log_softmax = nn.LogSoftmax(dim=1)
-
-    def forward(self, x):
-        x = self.relu(self.pool1(self.cnn1_bn(self.cnn1(x))))
-        x = self.relu(self.pool1(self.cnn2_bn(self.dropout(self.cnn2(x)))))
-        x = self.relu(self.pool1(self.cnn3_bn(self.cnn3(x))))
-        x = self.relu(self.pool1(self.cnn4_bn(self.dropout(self.cnn4(x)))))
-        x = self.relu(self.pool2(self.cnn5_bn(self.cnn5(x))))
-        x = self.relu(self.pool2(self.cnn6_bn(self.dropout(self.cnn6(x)))))
-        x = self.relu(self.pool2(self.cnn7_bn(self.dropout(self.cnn7(x)))))
-
-        x = x.reshape(x.size(0), -1)
-
-        x = self.relu(self.dropout(self.fc1(x)))
-        x = self.relu(self.dropout(self.fc2(x)))
-        x = self.log_softmax(self.fc3(x))
-        return x
 def connect_sql_server(sql_server_info):
     try:  # Kết nối đến SQL Server
         sql_server_conn = pyodbc.connect(
@@ -69,11 +28,6 @@ def connect_sql_server(sql_server_info):
         print(f"Kết nối SQL Sever thất bại. Lỗi: {e}")
 
     return sql_server_conn
-
-def load_trained_model(model_path):
-    model = EmotionDetector()
-    model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage), strict=False)
-    return model
 
 def extract_features(img, model, mtcnn, device):
     # Get cropped and prewhitened image tensor
@@ -117,18 +71,6 @@ def Stream(video_source, face_model,emote_model, mtcnn, sql_engine, device, casc
                 similarities = comparor(features,stored_features)
                 idx = torch.argmax(similarities)
                 max_similarity = similarities[idx]
-                #==================Emotion Detection==================
-                resize_frame = cv2.resize(gray[y:y + h, x:x + w], (48, 48))
-                X = resize_frame / 256
-                X = Image.fromarray((X))
-                X = val_transform(X).unsqueeze(0).to(device)
-                with torch.no_grad():
-                    emote_model.eval()
-                    log_ps = emote_model(X)
-                    ps = torch.exp(log_ps)
-                    top_p, top_class = ps.topk(1, dim=1)
-                    pred = emotion_dict[int(top_class.cpu().numpy()[0][0])]
-
                 if max_similarity > 0.4:
                     # Draw bounding box and text
                     face_txt = f'{names[idx]}'
@@ -136,20 +78,17 @@ def Stream(video_source, face_model,emote_model, mtcnn, sql_engine, device, casc
                     color = (0,255,0)
                     cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
                     cv2.putText(frame,face_txt, (x, y-50), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-                    cv2.putText(frame, emote_txt, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9,color, 2)
                 else:
                     face_txt = f'Unknown'
                     emote_txt = f'Emotion: {pred}'
                     color = (255,0,0)
                     cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
                     cv2.putText(frame,face_txt, (x, y-50), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-                    cv2.putText(frame, emote_txt, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9,color, 2)
                 lst_info.append((x, y, w, h, face_txt,emote_txt,color))
         else:
-            for (x, y, w, h, face_txt,emote_txt,color) in lst_info:
+            for (x, y, w, h, face_txt,color) in lst_info:
                 cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
                 cv2.putText(frame,face_txt, (x, y-50), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-                cv2.putText(frame, emote_txt, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9,color, 2)
         
         # Vẽ FPS lên góc trái của frame
         cv2.putText(frame, f'Number of people registered: {df.shape[0]}', (10, 30), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
@@ -178,7 +117,6 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     mtcnn = MTCNN(image_size=160, margin=0, min_face_size=20, post_process=True, device = device) # Define MTCNN module
     face_model = InceptionResnetV1(pretrained='vggface2',device=device).eval()
-    emote_model = load_trained_model(os.path.join(current_dir, 'Emotion_Detection_Ver2.pt')).to(device)
     Stream(0,face_model,emote_model,mtcnn,sql_engine,device,path_to_cascade) #0 is the default camera (webcam)
 
 
