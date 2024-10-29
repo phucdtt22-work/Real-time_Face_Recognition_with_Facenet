@@ -67,7 +67,6 @@ def Stream(video_source, facenet_model,mtcnn, device, cascade_path):
 
 def main():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    path_to_cascade = os.path.join(current_dir, 'haarcascade_frontalface_default.xml')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     mtcnn = MTCNN(image_size=160, margin=0, min_face_size=20, post_process=True, device = device, keep_all= True) # Define MTCNN module
     face_model = InceptionResnetV1(pretrained='vggface2',device=device).eval()
