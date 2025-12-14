@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Data & Outputs
+data/*.csv
+data/*.json
+data/*.yaml
+data/*.npy
+assets/processed/
+outputs/
+
+# Models (ignore large artifacts by default)
+models/*.onnx
+models/*.engine
+models/*.pth
+models/*.pt
+
+# Notebooks
+*.ipynb_checkpoints/
